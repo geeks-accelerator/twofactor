@@ -1,4 +1,4 @@
-module github.com/sec51/twofactor
+module github.com/geeks-accelerator/twofactor
 
 go 1.12
 
