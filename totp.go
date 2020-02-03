@@ -21,7 +21,7 @@ import (
 
 	"github.com/sec51/convert"
 	"github.com/sec51/convert/bigendian"
-	"github.com/sec51/cryptoengine"
+	"github.com/geeks-accelerator/cryptoengine"
 	qr "github.com/sec51/qrcode"
 )
 
@@ -50,6 +50,7 @@ type Totp struct {
 	totalVerificationFailures int                // the total amount of verification failures from the client - by default 10
 	lastVerificationTime      time.Time          // the last verification executed
 	hashFunction              crypto.Hash        // the hash function used in the HMAC construction (sha1 - sha156 - sha512)
+	storage cryptoengine.Storage
 }
 
 // This function is used to synchronize the counter with the client
@@ -80,7 +81,7 @@ func (otp *Totp) getIntCounter() uint64 {
 // it automatically generates a secret key using the golang crypto rand package. If there is not enough entropy the function returns an error
 // The key is not encrypted in this package. It's a secret key. Therefore if you transfer the key bytes in the network,
 // please take care of protecting the key or in fact all the bytes.
-func NewTOTP(account, issuer string, hash crypto.Hash, digits int) (*Totp, error) {
+func NewTOTP(account, issuer string, hash crypto.Hash, digits int, storage cryptoengine.Storage) (*Totp, error) {
 
 	keySize := hash.Size()
 	key := make([]byte, keySize)
@@ -94,13 +95,13 @@ func NewTOTP(account, issuer string, hash crypto.Hash, digits int) (*Totp, error
 		digits = 8
 	}
 
-	return makeTOTP(key, account, issuer, hash, digits)
+	return makeTOTP(key, account, issuer, hash, digits, storage)
 
 }
 
 // Private function which initialize the TOTP so that it's easier to unit test it
 // Used internally
-func makeTOTP(key []byte, account, issuer string, hash crypto.Hash, digits int) (*Totp, error) {
+func makeTOTP(key []byte, account, issuer string, hash crypto.Hash, digits int, storage cryptoengine.Storage) (*Totp, error) {
 	otp := new(Totp)
 	otp.key = key
 	otp.account = account
@@ -109,6 +110,7 @@ func makeTOTP(key []byte, account, issuer string, hash crypto.Hash, digits int) 
 	otp.stepSize = 30 // we set it to 30 seconds which is the recommended value from the RFC
 	otp.clientOffset = 0
 	otp.hashFunction = hash
+	otp.storage = storage
 	return otp, nil
 }
 
@@ -455,7 +457,7 @@ func (otp *Totp) ToBytes() ([]byte, error) {
 	}
 
 	// encrypt the TOTP bytes
-	engine, err := cryptoengine.InitCryptoEngine(otp.issuer)
+	engine, err := cryptoengine.InitCryptoEngine(otp.issuer, otp.storage)
 	if err != nil {
 		return nil, err
 	}
@@ -479,10 +481,10 @@ func (otp *Totp) ToBytes() ([]byte, error) {
 // TOTPFromBytes converts a byte array to a totp object
 // it stores the state of the TOTP object, like the key, the current counter, the client offset,
 // the total amount of verification failures and the last time a verification happened
-func TOTPFromBytes(encryptedMessage []byte, issuer string) (*Totp, error) {
+func TOTPFromBytes(encryptedMessage []byte, issuer string, storage cryptoengine.Storage) (*Totp, error) {
 
 	// init the cryptoengine
-	engine, err := cryptoengine.InitCryptoEngine(issuer)
+	engine, err := cryptoengine.InitCryptoEngine(issuer, storage)
 	if err != nil {
 		return nil, err
 	}
